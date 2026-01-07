@@ -1,0 +1,39 @@
+# === Node / Express ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npmrc
+
+# === Environment / Secrets ===
+.env
+.env.*
+!.env.example
+
+# === Build / Dist ===
+dist/
+build/
+out/
+
+# === Logs ===
+logs/
+*.log
+
+# === Runtime / Cache ===
+.cache/
+.tmp/
+.temp/
+coverage/
+
+# === Editor / OS ===
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# === Optional (comment if needed) ===
+# package-lock.json
+# yarn.lock
+uploads/
