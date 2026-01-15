@@ -3,10 +3,28 @@ import Post from '../models/Post.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from "fs";
+import {
+  deleteMediaFiles,
+  buildMediaFromFiles,
+  buildMediaFromUrl,
+  hasUploadedFiles,
+  buildPostData,
+  updatePostFields
+} from '../services/postService.js';
+
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Allowed image and video extensions
+const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+const allowedVideoExtensions = ['.mp4', '.webm', '.mov', '.mkv'];
+const allowedExtensions = [...allowedImageExtensions, ...allowedVideoExtensions];
+
+// Dangerous extensions that should be blocked
+const dangerousExtensions = ['.exe', '.apk', '.bat', '.cmd', '.sh', '.php', '.js', '.jar', '.zip', '.rar'];
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -28,13 +46,62 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('video/') || file.mimetype.startsWith('image/')) {
+    // Check both MIME type and file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    if ((file.mimetype.startsWith('video/') && allowedVideoExtensions.includes(fileExtension)) || 
+        (file.mimetype.startsWith('image/') && allowedImageExtensions.includes(fileExtension))) {
       cb(null, true);
     } else {
-      cb(new Error('Only images and videos are allowed'));
+      cb(new Error('Only allowed image and video formats are permitted'));
     }
   }
 });
+
+// Middleware to check for dangerous file extensions in uploaded files
+const secureUploadCheck = (req, res, next) => {
+  if (!req.files) {
+    return next();
+  }
+
+  const files = [];
+  if (req.files.videos && Array.isArray(req.files.videos)) {
+    files.push(...req.files.videos);
+  }
+  if (req.files.images && Array.isArray(req.files.images)) {
+    files.push(...req.files.images);
+  }
+
+  for (const file of files) {
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    // Check if the original filename contains dangerous extensions
+    if (dangerousExtensions.some(ext => file.originalname.toLowerCase().includes(ext))) {
+      // Delete the file from disk
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      
+      return res.status(400).json({ 
+        error: `File ${file.originalname} contains a potentially dangerous extension and has been blocked.` 
+      });
+    }
+    
+    // Additional check: verify the file extension is in the allowed list
+    if (!allowedExtensions.includes(fileExtension)) {
+      // Delete the file from disk
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      
+      return res.status(400).json({ 
+        error: `File ${file.originalname} has an unsupported extension.` 
+      });
+    }
+  }
+
+  next();
+};
 
 // Get all posts
 router.get('/', async (req, res) => {
@@ -53,6 +120,67 @@ router.get('/', async (req, res) => {
       .skip((parseInt(page) - 1) * parseInt(limit));
 
     res.json(posts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+//get posts by status
+router.get('/posts-by-status', async (req, res) => {
+  try {
+    const { status, limit = 50, page = 1 } = req.query;
+    const query = {};
+
+    if (status === undefined || status === null) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    if (status) query.status = parseInt(status);
+
+    const posts = await Post.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update post status (admin only)
+// status: 0 = pending, 1 = approved, 2 = rejected
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate status value
+    if (status === undefined || status === null) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    const statusValue = parseInt(status);
+    if (![0, 1, 2].includes(statusValue)) {
+      return res.status(400).json({ error: 'Invalid status. Must be 0 (pending), 1 (approved), or 2 (rejected)' });
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    post.status = statusValue;
+    await post.save();
+
+    res.json({ 
+      message: 'Post status updated successfully',
+      post: {
+        _id: post._id,
+        title: post.title,
+        status: post.status
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -278,71 +406,24 @@ router.delete('/:id/comment/:commentIndex', async (req, res) => {
 });
 
 // Create new post
-router.post('/', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images', maxCount: 10 }]), async (req, res) => {
+router.post('/', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images', maxCount: 10 }]), secureUploadCheck, async (req, res) => {
   try {
-    const { title, description, category, type, author, tags, featured, heroContent, topStory, categoryHighlight, mediaUrl } = req.body;
-    
-    console.log('Received data:', { title, category, type, hasFiles: !!req.files, mediaUrl });
+    const { title, description, mediaUrl, type } = req.body;
     
     // Validation
     if (!title || !description) {
       return res.status(400).json({ error: 'Title and description are required' });
     }
 
-    const media = [];
-    
-    // Handle URL-based media
-    if (mediaUrl) {
-      const mediaType = type === 'video' ? 'video' : 'image';
-      media.push({
-        url: mediaUrl,
-        mediaType: mediaType
-      });
-    }
-    // Handle uploaded files
-    else if (req.files) {
-      if (req.files.videos && Array.isArray(req.files.videos)) {
-        req.files.videos.forEach(file => {
-          media.push({
-            url: `/uploads/videos/${file.filename}`,
-            mediaType: 'video'
-          });
-        });
-      }
-      if (req.files.images && Array.isArray(req.files.images)) {
-        req.files.images.forEach(file => {
-          media.push({
-            url: `/uploads/images/${file.filename}`,
-            mediaType: 'image'
-          });
-        });
-      }
-    }
+    // Build media array from URL or uploaded files
+    const media = mediaUrl 
+      ? buildMediaFromUrl(mediaUrl, type) 
+      : buildMediaFromFiles(req.files);
 
-    console.log('Media array:', media);
-
-    // Create post object
-    const postData = {
-      title,
-      description,
-      category: category || 'entertainment',
-      postType: type || 'article',
-      media,
-      author: author || 'Admin',
-      tags: tags ? tags.split(',').map(t => t.trim()) : [],
-      featured: featured === 'true' || featured === true,
-      heroContent: heroContent === 'true' || heroContent === true,
-      topStory: topStory === 'true' || topStory === true,
-      categoryHighlight: categoryHighlight === 'true' || categoryHighlight === true,
-      views: 0,
-      likes: 0,
-      comments: []
-    };
-
-    console.log('Post data:', postData);
-
+    const postData = buildPostData(req.body, media);
     const post = new Post(postData);
     await post.save();
+    
     res.status(201).json(post);
   } catch (error) {
     console.error('Post creation error:', error);
@@ -351,59 +432,27 @@ router.post('/', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images
 });
 
 // Update post
-router.put('/:id', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images', maxCount: 10 }]), async (req, res) => {
+router.put('/:id', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images', maxCount: 10 }]), secureUploadCheck, async (req, res) => {
   try {
-    const { title, description, category, type, author, tags, featured, heroContent, topStory, mediaUrl } = req.body;
+    const { mediaUrl, type } = req.body;
     
     const post = await Post.findById(req.params.id);
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Update fields
-    if (title) post.title = title;
-    if (description) post.description = description;
-    if (category) post.category = category;
-    if (type) post.postType = type;
-    if (author) post.author = author;
-    if (tags) post.tags = tags.split(',').map(t => t.trim());
-    if (featured !== undefined) post.featured = featured === 'true';
-    if (heroContent !== undefined) post.heroContent = heroContent === 'true';
-    if (topStory !== undefined) post.topStory = topStory === 'true';
+    // Update basic fields
+    updatePostFields(post, req.body);
 
-    // Handle URL-based media
+    // Handle media updates
     if (mediaUrl) {
-      const mediaType = type === 'video' ? 'video' : 'image';
-      const newMedia = {
-        url: mediaUrl,
-        mediaType: mediaType
-      };
-      post.media = [...(post.media || []), newMedia];
-    }
-    // Handle new media uploads
-    else if (req.files) {
-      const newMedia = [];
-      
-      if (req.files.videos && Array.isArray(req.files.videos)) {
-        req.files.videos.forEach(file => {
-          newMedia.push({
-            url: `/uploads/videos/${file.filename}`,
-            mediaType: 'video'
-          });
-        });
-      }
-      if (req.files.images && Array.isArray(req.files.images)) {
-        req.files.images.forEach(file => {
-          newMedia.push({
-            url: `/uploads/images/${file.filename}`,
-            mediaType: 'image'
-          });
-        });
-      }
-      
-      if (newMedia.length > 0) {
-        post.media = [...(post.media || []), ...newMedia];
-      }
+      // Delete existing media files before replacing with URL
+      deleteMediaFiles(post.media);
+      post.media = buildMediaFromUrl(mediaUrl, type);
+    } else if (hasUploadedFiles(req.files)) {
+      // Delete existing media files before replacing with new uploads
+      deleteMediaFiles(post.media);
+      post.media = buildMediaFromFiles(req.files);
     }
 
     await post.save();
@@ -416,14 +465,22 @@ router.put('/:id', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'imag
 // Delete post
 router.delete('/:id', async (req, res) => {
   try {
-    const post = await Post.findByIdAndDelete(req.params.id);
+    const post = await Post.findById(req.params.id);
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
+
+    // Delete associated media files from storage
+    deleteMediaFiles(post.media);
+
+    // Delete the post from database
+    await Post.findByIdAndDelete(req.params.id);
+    
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 export default router;

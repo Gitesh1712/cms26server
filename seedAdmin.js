@@ -20,8 +20,10 @@ const createAdminUser = async () => {
 
     
     const admin = new User({
-      email: 'admin@example.com',
-      password: 'admin123', 
+      name: 'Administrator',
+      email: 'admin@nns.com',
+      mobile: '',
+      password: 'nnsadmin0123', 
       role: 'admin'
     });
 

@@ -1,106 +1,3 @@
-// import express from 'express';
-// import mongoose from 'mongoose';
-// import cors from 'cors';
-// import dotenv from 'dotenv';
-// import path from 'path';
-// import { fileURLToPath } from 'url';
-// import postRoutes from './routes/posts.js';
-// import authRoutes from './routes/auth.js';
-// import newsletterRoutes from './routes/newsletter.js';
-
-// dotenv.config();
-
-// const app = express();
-// const PORT = process.env.PORT || 5000; // Default to 5000 instead of 5001
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
-
-
-// // Configure CORS based on environment
-// const corsOptions = {
-//   origin: process.env.FRONTEND_URL || process.env.CLIENT_URL || '*',
-//   credentials: true,
-//   optionsSuccessStatus: 200
-// };
-
-// app.use(cors(corsOptions));
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
-// app.use('/uploads', (req, res, next) => {
-//   res.setHeader('Accept-Ranges', 'bytes');
-//   res.setHeader('Vary', 'Range');
-  
-//   if (req.path.includes('/images/')) {
-//     res.setHeader('Cache-Control', 'public, max-age=2592000'); 
-//     res.setHeader('Pragma', 'cache');
-//   } else if (req.path.includes('/videos/')) {
-//     res.setHeader('Cache-Control', 'public, max-age=86400');
-//     res.setHeader('Content-Type', 'video/mp4');
-//   } else {
-//     res.setHeader('Cache-Control', 'public, max-age=86400'); 
-//     res.setHeader('Pragma', 'cache');
-//   }
-
-//   next();
-// }, express.static(path.join(__dirname, 'uploads')));
-// import fs from 'fs';
-// const uploadDirs = [
-//   path.join(__dirname, 'uploads/images'),
-//   path.join(__dirname, 'uploads/videos')
-// ];
-
-// uploadDirs.forEach(dir => {
-//   if (!fs.existsSync(dir)) {
-//     fs.mkdirSync(dir, { recursive: true });
-//   }
-// });
-// const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || `mongodb://localhost:27017/${process.env.DB_NAME || 'kaivailayam'}`;
-
-// // Configure MongoDB connection options based on environment
-// const mongoOptions = {
-//   useNewUrlParser: true,
-//   useUnifiedTopology: true,
-// };
-
-// // Add additional options for production
-// if (process.env.NODE_ENV === 'production') {
-//   mongoOptions.maxPoolSize = 10;
-//   mongoOptions.serverSelectionTimeoutMS = 5000;
-//   mongoOptions.socketTimeoutMS = 45000;
-// }
-
-// mongoose.connect(MONGODB_URI, mongoOptions)
-// .then(() => console.log('MongoDB connected successfully'))
-// .catch(err => {
-//   console.error('MongoDB connection error:', err);
-//   console.log('Server will continue without database connection for static file serving');
-// });
-// app.use('/api/posts', postRoutes);
-// app.use('/api/auth', authRoutes);
-// app.use('/api/newsletter', newsletterRoutes);
-
-
-// app.get('/', (req, res) => {
-//   res.json({ message: 'Kaivailayam API is running!' });
-// });
-
-
-// app.use((req, res) => {
-//   console.log(`404 - Route not found: ${req.method} ${req.path}`);
-//   res.status(404).json({ error: 'Route not found', path: req.path });
-// });
-
-
-// app.use((err, req, res, next) => {
-//   console.error('Server error:', err);
-//   res.status(500).json({ error: err.message || 'Internal server error' });
-// });
-
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-//   console.log(`API available at http://localhost:${PORT}/api`);
-// });
-
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -108,12 +5,19 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-
 import postRoutes from './routes/posts.js';
+import publicPostRoutes from './routes/publicPosts.js';
 import authRoutes from './routes/auth.js';
 import newsletterRoutes from './routes/newsletter.js';
+import publicNewsletterRoutes from './routes/publicNewsletter.js';
+import leadRoutes from './routes/lead.js';
+import categoryRoutes from './routes/category.js';
+import publicCategoryRoutes from './routes/publicCategory.js';
+import userRoutes from './routes/users.js';
 
-dotenv.config();
+import { authenticate } from './middleware/auth.js';
+
+import 'dotenv/config';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -215,9 +119,7 @@ uploadDirs.forEach(dir => {
    MONGODB CONNECTION
 ================================ */
 const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  process.env.MONGO_URI ||
-  'mongodb://127.0.0.1:27017/kaivailayam';
+  process.env.DB_URL;
 
 const mongoOptions = {
   maxPoolSize: process.env.NODE_ENV === 'production' ? 10 : undefined,
@@ -235,9 +137,21 @@ mongoose
 /* ===============================
    ROUTES
 ================================ */
-app.use('/api/posts', postRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/newsletter', newsletterRoutes);
+// Public routes - no authentication required
+app.use('/api/', authRoutes);
+// Protected routes - authentication required
+app.use('/api/allposts', publicPostRoutes);
+app.use('/api/public/posts', publicPostRoutes);
+app.use('/api/posts',authenticate, postRoutes);
+app.use('/api/newsletter', authenticate, newsletterRoutes);
+app.use('/api/public/newsletter', publicNewsletterRoutes);
+// app.use('/api/leads', authenticate, leadRoutes);
+app.use('/api/public/leads',leadRoutes);
+app.use('/api/leads',authenticate,leadRoutes);
+// app.use('/api/categories', authenticate, categoryRoutes);
+app.use('/api/categories',authenticate, categoryRoutes);
+app.use('/api/public/categories',publicCategoryRoutes);
+app.use('/api/users', authenticate, userRoutes);
 
 /* ===============================
    HEALTH CHECK

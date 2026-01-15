@@ -18,7 +18,17 @@ const postSchema = new mongoose.Schema({
   title: String,
   description: String,
   category: String,
-  postType: String,
+  postType: {
+    type: String,
+    enum: ['video', 'article'],
+    required: true,
+    default: 'article'
+  },
+  status: {
+    type: Number,
+    enum: [0, 1, 2],  // 0 = pending, 1 = approved, 2 = rejected
+    default: 0
+  },
   media: {
     type: [mediaSchema],
     default: []
@@ -58,6 +68,7 @@ postSchema.index({ createdAt: -1 });
 postSchema.index({ category: 1, createdAt: -1 });
 postSchema.index({ topStory: 1 });
 postSchema.index({ featured: 1 });
+postSchema.index({ status: 1 }); // optional: index status for faster queries
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;
