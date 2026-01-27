@@ -3,6 +3,45 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+
+/* ---------------- TOGGLE USER ACTIVE STATUS ---------------- */
+router.post('/toggle-status', async (req, res) => {
+  console.log('Toggle status endpoint hit', req.body);
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ code: "4000", message: "User ID is required" });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ code: "4004", message: "User not found" });
+    }
+
+    // Prevent deactivating admin users
+    if (user.role === 'admin') {
+      return res.status(400).json({ code: "4000", message: "Admin users cannot be deactivated" });
+    }
+
+    // Toggle the active status
+    user.isActive = !user.isActive;
+    await user.save();
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.json({ 
+      code: "1000", 
+      message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, 
+      data: userResponse 
+    });
+  } catch (error) {
+    res.status(500).json({ code: "5000", message: "error", error: error.message });
+  }
+});
+
 /* ---------------- GET ALL USERS ---------------- */
 router.get('/', async (req, res) => {
   try {

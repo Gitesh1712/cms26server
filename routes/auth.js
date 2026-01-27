@@ -42,6 +42,13 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact an administrator.' });
+    }
+        console.log("usernme:",user.name);
+    console.log("user",user);
+
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
@@ -50,12 +57,14 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
+    console.log("usernme:",user.name);
+    console.log("user",user);
     res.json({
       message: 'Login successful',
       token,
       user: {
         id: user._id,
+        name: user.name,
         email: user.email,
         role: user.role
       }

@@ -58,6 +58,12 @@ app.options('*', cors()); // handle preflight requests
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Log ALL incoming requests
+// app.use((req, res, next) => {
+//   console.log(`[${req.method}] ${req.path}`, req.body);
+//   next();
+// });
+
 /* ===============================
    STATIC UPLOADS + CACHE
 ================================ */

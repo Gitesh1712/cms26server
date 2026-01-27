@@ -149,7 +149,7 @@ router.get('/posts-by-status', async (req, res) => {
 });
 
 // Update post status (admin only)
-// status: 0 = pending, 1 = approved, 2 = rejected
+// status: 0 = pending, 1 = approved, 2 = rejected, 4 = hidden
 router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -161,8 +161,8 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     const statusValue = parseInt(status);
-    if (![0, 1, 2].includes(statusValue)) {
-      return res.status(400).json({ error: 'Invalid status. Must be 0 (pending), 1 (approved), or 2 (rejected)' });
+    if (![0, 1, 2, 4].includes(statusValue)) {
+      return res.status(400).json({ error: 'Invalid status. Must be 0 (pending), 1 (approved), 2 (rejected), or 4 (hidden)' });
     }
 
     const post = await Post.findById(id);
@@ -421,6 +421,12 @@ router.post('/', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images
       : buildMediaFromFiles(req.files);
 
     const postData = buildPostData(req.body, media);
+    
+    // Check if user is admin and auto-approve the post
+    if (req.user && req.user.role === 'admin') {
+      postData.status = 1; // 1 = approved
+    }
+    
     const post = new Post(postData);
     await post.save();
     

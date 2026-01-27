@@ -26,7 +26,7 @@ const postSchema = new mongoose.Schema({
   },
   status: {
     type: Number,
-    enum: [0, 1, 2],  // 0 = pending, 1 = approved, 2 = rejected
+    enum: [0, 1, 2, 4],  // 0 = pending, 1 = approved, 2 = rejected, 4 = hidden
     default: 0
   },
   media: {
