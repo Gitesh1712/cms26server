@@ -37,6 +37,11 @@ const postSchema = new mongoose.Schema({
     type: String,
     default: 'Admin'
   },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
   tags: [String],
   featured: Boolean,
   views: {

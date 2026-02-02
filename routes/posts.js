@@ -109,6 +109,11 @@ router.get('/', async (req, res) => {
     const { category, featured, heroContent, topStory, limit = 50, page = 1 } = req.query;
     const query = {};
 
+    // If user is not admin, filter by their userId
+    if (req.user && req.user.role !== 'admin') {
+      query.userId = req.userId;
+    }
+
     if (category) query.category = category;
     if (featured) query.featured = featured === 'true';
     if (heroContent) query.heroContent = heroContent === 'true';
@@ -422,6 +427,11 @@ router.post('/', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'images
 
     const postData = buildPostData(req.body, media);
     
+    // Add userId from authenticated user
+    if (req.userId) {
+      postData.userId = req.userId;
+    }
+    
     // Check if user is admin and auto-approve the post
     if (req.user && req.user.role === 'admin') {
       postData.status = 1; // 1 = approved
@@ -449,6 +459,7 @@ router.put('/:id', upload.fields([{ name: 'videos', maxCount: 5 }, { name: 'imag
 
     // Update basic fields
     updatePostFields(post, req.body);
+
 
     // Handle media updates
     if (mediaUrl) {
