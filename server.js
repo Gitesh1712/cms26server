@@ -14,6 +14,8 @@ import leadRoutes from './routes/lead.js';
 import categoryRoutes from './routes/category.js';
 import publicCategoryRoutes from './routes/publicCategory.js';
 import userRoutes from './routes/users.js';
+import shortsRoutes from './routes/shorts.js';
+import publicShortsRoutes from './routes/publicShorts.js';
 
 import { authenticate } from './middleware/auth.js';
 
@@ -158,6 +160,8 @@ app.use('/api/leads',authenticate,leadRoutes);
 app.use('/api/categories',authenticate, categoryRoutes);
 app.use('/api/public/categories',publicCategoryRoutes);
 app.use('/api/users', authenticate, userRoutes);
+app.use('/api/shorts', authenticate, shortsRoutes);
+app.use('/api/public/shorts', publicShortsRoutes);
 
 /* ===============================
    HEALTH CHECK
