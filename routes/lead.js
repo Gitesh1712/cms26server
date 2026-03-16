@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post("/submit", async (req, res) => {
   try {
-    const { name, email, inquiryType, message,mobile } = req.body;
+    const { name, email, inquiryType, message, mobile } = req.body;
     console.log(req.body);
     if (!name || !email || !inquiryType || !message) {
       return res.status(400).json({ message: "All fields are required" });
@@ -16,29 +16,19 @@ router.post("/submit", async (req, res) => {
       email,
       inquiryType,
       message,
-      mobile
+      mobile,
     });
 
     res.status(201).json({
       success: true,
       message: "Lead submitted successfully",
-      lead
+      lead,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
-}
-);
+});
 
-// router.get("/count", async (req, res) => {
-//   try {
-//     const countTotal = await Lead.countDocuments();
-//     const countToday = await Lead.count
-//     res.json({ success: true, totalLeads: countTotal, todayLeads:countToday });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// })
 router.get("/count", async (req, res) => {
   try {
     // Start of today (00:00:00)
@@ -54,22 +44,53 @@ router.get("/count", async (req, res) => {
       Lead.countDocuments({
         createdAt: {
           $gte: startOfToday,
-          $lt: startOfTomorrow
-        }
-      })
+          $lt: startOfTomorrow,
+        },
+      }),
     ]);
 
     res.json({
       success: true,
       totalLeads: countTotal,
-      todayLeads: countToday
+      todayLeads: countToday,
     });
-
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: err.message
+      message: err.message,
     });
   }
 });
+
+router.get("/allLeads", async (req, res) => {
+  try {
+    const leads = await Lead.find().sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      leads,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+router.delete("/delete/:id", async (req, res) => {
+  try {
+    const leadId = req.params.id;
+    const deletedLead = await Lead.findByIdAndDelete(leadId);
+
+    if (!deletedLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Lead deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 export default router;
